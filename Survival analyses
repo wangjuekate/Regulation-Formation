@@ -1,0 +1,149 @@
+#set up the survival data set
+library(foreign)
+data<-read.dta("D:\\Regulation Project\\Regulationtest0405.dta")
+dataoutput<-data[,1:2]
+dataoutput$month<-data$month
+
+#assign time range
+dataoutput<-dataoutput[order(dataoutput$statefipx,dataoutput$currentyear,dataoutput$month),]
+data<-data[order(data$statefipx,data$currentyear,data$month),]
+
+addtime<-function(input){
+output<-seq(1:nrow(input))
+output<-paste(output,collapse=",")
+return(output)
+}
+library(plyr)
+results<-ddply(dataoutput,.(statefipx),addtime)
+dataoutput$timepast<-as.numeric(as.matrix(unlist(strsplit(results[,2],","))))
+
+write.dta(dataoutput,file="statetimepanel.dta")
+
+dataoutput<-read.dta("statetimepanel.dta")
+#calculate average distances among firms
+dataoutput$stateregu_constrainnow<-data$stateregu_constrainnow
+dataoutput$industryact_p<-data$industryact_p
+ dataoutput$allactivity_p <-data$allactivity_p 
+ 
+ dataoutput$gdppercap<-data$gdppercap
+  dataoutput$alldrone_p  <-data$alldrone_p  
+   dataoutput$totalpop <-data$totalpop
+   
+ dataoutput$citi6013<-data$citi6013
+  dataoutput$hvd2_winmargin_4yr<-data$hvd2_winmargin_4yr 
+   dataoutput$numautodriven <-data$numautodriven 
+      dataoutput$mds1  <-data$mds1 
+ dataoutput$neighborfirm_p <-data$neighborfirm_p
+   
+dispersion<-read.table("dispersionmeasure.csv",sep=",",header=TRUE)
+dispersion<-dispersion[order(dispersion$statefipx,dispersion$currentyear,dispersion$month),]
+dataoutput<-dataoutput[order(dataoutput$statefipx,dataoutput$currentyear,dataoutput$month),]
+
+dataoutput$dispersion<-dispersion$dispersion
+
+
+
+library("survival")
+library("survminer")
+dataoutput1<-dataoutput[which(dataoutput$stateregu_constrainnow<2),]
+
+results<- coxph(Surv(timepast,stateregu_constrainnow) ~ 
+dispersion*hobbyistactivity_p+
+dispersion*allactivity_p+
+gdppercap+
+totalpop+
+alldrone_p+
+   citi6013+ hvd2_winmargin_4yr
+, data = dataoutput1)
+summary(results)
+
+
+#add distance of drone firms
+grantedfirms<-read.table("DroneDistribution2006_2016.csv",sep=",",header=TRUE)
+grantedfirms$date<-as.Date(paste(grantedfirms$year, grantedfirms$month,"01",sep="-"))
+
+
+
+
+install.packages("geosphere")
+library(geosphere)
+
+points<-read.table("D:\\Regulation Project\\County_Fips_LA.csv", sep=",",header=TRUE)
+
+library(foreign)
+dataoutput<-read.dta("statetimepanel.dta")
+dataoutput$date<-as.Date(paste(dataoutput$currentyear,dataoutput$month,"01",sep="-"))
+
+points<-points[which(!is.na(points$latitude)),]
+
+
+calculateset<-function(statefips, countyfips,points){
+address<-which(points[,2]==statefips)
+output<-matrix(0,nrow=length(countyfips)*(length(countyfips)-1)/2, ncol=1)
+k<-1
+for(i in 1: (length(countyfips)-1)){
+for(j in (i+1):length(countyfips)){
+if(length(address)!=0){
+find1<-which(points[address,3]==countyfips[i])
+find2<-which(points[address,3]==countyfips[j])
+
+if(countyfips[i]!=countyfips[j] & length(find1)!=0
+& length(find2)!=0){
+set1<-points[address[find1],7:8]
+set2<-points[address[find2],7:8]
+output[k]<-distm(cbind(set1[2],set1[1]), cbind(set2[2],set2[1]), fun = distHaversine)
+k<-k+1
+}
+}
+}
+}
+
+meandistance<-mean(output)
+return(meandistance)
+}
+
+calculatemean<-function(input,grantedfirms,points){
+address<-which(as.Date(grantedfirms[,5])> as.Date(as.matrix(input[5]))-120&
+as.Date(grantedfirms[,5])< as.Date(as.matrix(input[5])) & 
+as.numeric(as.matrix(grantedfirms[,3]))==as.numeric(as.matrix(input[1])))
+if(length(address)>1){
+countyfips<-grantedfirms[address, 4]
+output<-calculateset(as.numeric(as.matrix(input[1])),countyfips,points)
+}else{
+output<-0}
+return(output)
+}
+
+
+library(plyr)
+results<-apply(dataoutput,1,calculatemean,grantedfirms,points)
+
+dataoutput$dispersion<-results
+write.table(dataoutput,file="dispersionmeasure.csv",sep=",",row.names=FALSE)
+
+
+#add hobbyists activities
+hobbyists<-read.table("D:\\Regulation Project\\HobbyistsTable.csv",sep=",",header=TRUE)
+
+hobbyists$date<-as.Date(paste(hobbyists$Startyear, hobbyists$StartMonth,"01",sep="-"))
+
+dataoutput$date<-as.Date(paste(dataoutput$currentyear, dataoutput$month,"01",sep="-"))
+
+
+
+adduphobbyists<-function(input,compare){
+addresstoadd<-address<-which(as.Date(compare[,5])> as.Date(as.matrix(input[19]))-120&
+as.Date(compare[,5])< as.Date(as.matrix(input[19])) & 
+as.numeric(as.matrix(compare[,3]))==as.numeric(as.matrix(input[1])))
+return(length(addresstoadd))
+}
+
+results<-apply(dataoutput,1,adduphobbyists,hobbyists)
+dataoutput$hobbyistactivity_p<-results
+
+
+
+
+
+
+

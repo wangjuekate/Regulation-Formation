@@ -1,0 +1,36 @@
+
+xtset docID time
+
+cumuapply
+
+replace newdistance = newdistance/1000000
+
+gen safety= statesecurity +citysecurity
+
+gen privacy = stateprivacy+ cityprivacy
+
+xtpoisson petitionpolitical  ndealio  publicadoption napplication  safety privacy , fe robust
+
+est sto model1
+
+xtpoisson petitionpolitical newdistance ndealio  publicadoption napplication  safety privacy , fe robust
+
+est sto model2
+
+
+xtpoisson socialprotests ndealio   publicadoption napplication  safety privacy , fe robust
+
+est sto model3
+
+xtpoisson socialprotests newdistance ndealio   publicadoption napplication  safety privacy , fe robust
+
+est sto model4
+
+esttab model1  model2  model3 model4 using ier.rtf, b(3) se(3) sca(ll) star(* 0.05 ** 0.01 *** 0.001) replace
+
+
+sum petitionpolitical socialprotests newdistance ndealio  publicadoption napplication  safety privacy
+
+
+
+
